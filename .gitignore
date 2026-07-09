@@ -1,0 +1,99 @@
+# Environment files (secrets). *.example files are committed as templates.
+.env
+.env.local
+.env.production
+.env.development
+
+# Signing keys. jwt.key is generated per installation on first boot; committing
+# it would let anyone forge an admin token for every deployment of this code.
+jwt.key
+*.key
+*.pem
+
+# Backup files.
+# NOTE: never blanket-ignore *.sql — database/init/*.sql IS the schema, and
+# ignoring it silently ships a repo that cannot create its own database.
+backups/
+*.tar.gz
+
+# Dependencies
+node_modules/
+vendor/
+
+# Build outputs
+dist/
+build/
+tmp/
+
+# Log files
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage directory used by tools like istanbul
+coverage/
+*.lcov
+
+# nyc test coverage
+.nyc_output
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Editor directories and files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Docker volumes
+postgres_data/
+postgres_dev_data/
+
+# Go build files
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# go.sum is intentionally NOT ignored: it pins dependency hashes, without it a
+# clone cannot reproduce the build.
+go.work.sum
+
+# Air build files (Go hot reloading)
+tmp/
+
+# Frontend files
+.next/
+.nuxt/
+.cache/
+
+# Upload directories (if created)
+uploads/
+files/
+
+# Database dumps
+*.dump
+*.backup
+
+# Temporary files
+*.tmp
+*.temp
