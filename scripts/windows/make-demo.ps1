@@ -80,8 +80,12 @@ New-Item -ItemType Directory -Force -Path (Join-Path $out 'backups') | Out-Null
 # Arabic docs live in .txt, never in a .bat: cmd re-reads a running batch file and
 # non-ASCII bytes shift its read offset, silently corrupting later lines.
 # UTF-8 with a BOM so Notepad opens it right-to-left correctly on any Windows.
-$readme = Get-Content (Join-Path $PSScriptRoot 'demo-readme.txt') -Raw -Encoding UTF8
-[System.IO.File]::WriteAllText((Join-Path $out 'READ-ME-FIRST.txt'), $readme, (New-Object System.Text.UTF8Encoding $true))
+$utf8bom = New-Object System.Text.UTF8Encoding $true
+foreach ($doc in @{ 'demo-readme.txt' = 'READ-ME-FIRST.txt'; 'demo-accounts.txt' = 'ACCOUNTS.txt' }.GetEnumerator()) {
+  $src = Join-Path $PSScriptRoot $doc.Key
+  if (-not (Test-Path $src)) { throw "Missing doc: $src" }
+  [System.IO.File]::WriteAllText((Join-Path $out $doc.Value), (Get-Content $src -Raw -Encoding UTF8), $utf8bom)
+}
 
 # DB_PORT matches the 5433 that START.bat writes into postgresql.conf.
 # The JWT signing key is NOT shipped: the backend generates a fresh one per
@@ -101,7 +105,7 @@ Copy-Item (Join-Path $repo 'LICENSE')   (Join-Path $out 'LICENSE')   -ErrorActio
 Copy-Item (Join-Path $repo 'NOTICE.md') (Join-Path $out 'NOTICE.md') -ErrorAction SilentlyContinue
 
 # --- 6. leak check + zip -----------------------------------------------------
-Write-Host "[6/6] Checking for secrets, then zipping..."
+Write-Host "[6/6] Checking the package, then zipping..."
 $leaks = Get-ChildItem $out -Recurse -File -Force |
          Where-Object { $_.Name -in @('jwt.key') -or $_.Extension -in @('.pem', '.key') -or $_.Name -like '*.dump' }
 if ($leaks) {
@@ -109,6 +113,19 @@ if ($leaks) {
   throw 'Refusing to package: secrets or customer data found in the output.'
 }
 if (Test-Path (Join-Path $out 'pgdata')) { throw 'Refusing to package: pgdata (live database) is in the output.' }
+
+# A .bat with non-ASCII bytes corrupts itself as cmd re-reads it mid-run.
+foreach ($b in 'START.bat', 'STOP.bat') {
+  if ([System.IO.File]::ReadAllBytes((Join-Path $out $b)) | Where-Object { $_ -gt 127 }) {
+    throw "Refusing to package: $b contains non-ASCII bytes."
+  }
+}
+
+# START.bat points the tester at these. Shipping without them is how you get a
+# launcher that tells someone to read a file that does not exist.
+foreach ($f in 'READ-ME-FIRST.txt', 'ACCOUNTS.txt', 'LICENSE', 'app\.env', 'app\web\index.html', 'database\demo\demo_accounts.sql') {
+  if (-not (Test-Path (Join-Path $out $f))) { throw "Refusing to package: missing $f" }
+}
 
 Compress-Archive -Path $out -DestinationPath $zip -CompressionLevel Optimal
 

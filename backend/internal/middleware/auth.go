@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -17,20 +18,42 @@ import (
 	"github.com/google/uuid"
 )
 
-// jwtSecret is resolved once at startup, in order of preference:
-//  1. the JWT_SECRET environment variable (recommended for production),
-//  2. a persisted key file (jwt.key) next to the binary,
-//  3. a freshly generated random secret, which is then saved to jwt.key.
-// This guarantees every installation has its own unique, stable signing key
-// instead of a hardcoded value shared across all copies.
-var jwtSecret = loadJWTSecret()
+// The signing key is resolved once, on first use, in order of preference:
+//  1. the JWT_SECRET environment variable,
+//  2. a persisted key file,
+//  3. a freshly generated random secret, which is then saved to that file.
+// Every installation therefore has its own unique, stable key rather than a
+// hardcoded value shared by every copy of this code.
+//
+// Resolution is lazy, not a package-level var, so that main() can call
+// SetJWTKeyPath before the first token is signed. An installed program lives in
+// a read-only folder; without this the key file could not be written, a new
+// random secret would be minted on every launch, and every signed-in member of
+// staff would be logged out each time the program restarted.
+var (
+	jwtOnce    sync.Once
+	jwtKey     []byte
+	jwtKeyPath = "jwt.key" // relative to the working directory unless overridden
+)
+
+// SetJWTKeyPath chooses where the signing key is persisted. Call it before
+// serving any request.
+func SetJWTKeyPath(path string) {
+	if path != "" {
+		jwtKeyPath = path
+	}
+}
+
+func jwtSecret() []byte {
+	jwtOnce.Do(func() { jwtKey = loadJWTSecret() })
+	return jwtKey
+}
 
 func loadJWTSecret() []byte {
 	if s := os.Getenv("JWT_SECRET"); s != "" {
 		return []byte(s)
 	}
-	const keyFile = "jwt.key"
-	if data, err := os.ReadFile(keyFile); err == nil && len(data) >= 32 {
+	if data, err := os.ReadFile(jwtKeyPath); err == nil && len(data) >= 32 {
 		return data
 	}
 	buf := make([]byte, 48)
@@ -39,10 +62,16 @@ func loadJWTSecret() []byte {
 		return []byte("insecure-temporary-secret-please-set-JWT_SECRET")
 	}
 	secret := []byte(base64.StdEncoding.EncodeToString(buf))
-	if err := os.WriteFile(keyFile, secret, 0600); err != nil {
-		log.Printf("WARNING: could not persist JWT secret to %s: %v", keyFile, err)
+	if err := os.MkdirAll(filepath.Dir(jwtKeyPath), 0o755); err != nil && !os.IsExist(err) {
+		log.Printf("WARNING: could not create the folder for %s: %v", jwtKeyPath, err)
+	}
+	if err := os.WriteFile(jwtKeyPath, secret, 0600); err != nil {
+		// Not fatal, but everyone will be signed out on the next restart, so say
+		// so loudly rather than leaving a puzzle.
+		log.Printf("WARNING: could not persist the JWT secret to %s: %v", jwtKeyPath, err)
+		log.Printf("WARNING: staff will be logged out every time this program restarts.")
 	} else {
-		log.Printf("Generated a new random JWT secret and saved it to %s", keyFile)
+		log.Printf("Generated a new random JWT secret and saved it to %s", jwtKeyPath)
 	}
 	return secret
 }
@@ -76,7 +105,7 @@ func GenerateToken(user *models.User) (string, error) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 
 	// Sign token with secret
-	tokenString, err := token.SignedString(jwtSecret)
+	tokenString, err := token.SignedString(jwtSecret())
 	if err != nil {
 		return "", err
 	}
@@ -88,7 +117,7 @@ func GenerateToken(user *models.User) (string, error) {
 func ValidateToken(tokenString string) (*Claims, error) {
 	// Parse token
 	token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(token *jwt.Token) (interface{}, error) {
-		return jwtSecret, nil
+		return jwtSecret(), nil
 	})
 
 	if err != nil {
