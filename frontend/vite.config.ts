@@ -44,7 +44,10 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     assetsDir: 'assets',
-    sourcemap: true,
+    // Source maps ship the original TypeScript to anyone who opens devtools on a
+    // customer's machine. This code gets sold; keep the source out of the build.
+    // Set VITE_SOURCEMAP=true when you genuinely need to debug a production build.
+    sourcemap: process.env.VITE_SOURCEMAP === 'true',
     rollupOptions: {
       output: {
         manualChunks: {

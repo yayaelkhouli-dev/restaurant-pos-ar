@@ -38,6 +38,10 @@ import type {
   StockCountItemDetail,
   InventoryReport,
   ModifierGroup,
+  BackupInfo,
+  BackupStatus,
+  BackupSettingsInput,
+  BackupRunResult,
 } from '@/types';
 
 class APIClient {
@@ -648,6 +652,46 @@ class APIClient {
 
   async updateSettings(data: AppSettings): Promise<APIResponse> {
     return this.request({ method: 'PUT', url: '/admin/settings', data });
+  }
+
+  // Backups (النسخ الاحتياطي)
+  async getBackups(): Promise<APIResponse<BackupInfo[]>> {
+    return this.request({ method: 'GET', url: '/admin/backups' });
+  }
+
+  async createBackup(): Promise<APIResponse<BackupRunResult>> {
+    return this.request({ method: 'POST', url: '/admin/backups/create' });
+  }
+
+  async restoreBackup(name: string): Promise<APIResponse<{ safety_backup: string }>> {
+    // `confirm` is required by the server: a restore overwrites every order and
+    // payment, so it must never happen as a side effect of a stray request.
+    return this.request({ method: 'POST', url: '/admin/backups/restore', data: { name, confirm: true } });
+  }
+
+  async deleteBackup(name: string): Promise<APIResponse> {
+    return this.request({ method: 'POST', url: '/admin/backups/delete', data: { name } });
+  }
+
+  // Downloads through axios rather than a plain <a href>: the endpoint needs the
+  // Authorization header, and a bare link would get a 401 — which the response
+  // interceptor turns into a logout.
+  async downloadBackup(name: string): Promise<Blob> {
+    const response = await this.client.request<Blob>({
+      method: 'GET',
+      url: '/admin/backups/download',
+      params: { name },
+      responseType: 'blob',
+    });
+    return response.data;
+  }
+
+  async getBackupSettings(): Promise<APIResponse<BackupStatus>> {
+    return this.request({ method: 'GET', url: '/admin/backup-settings' });
+  }
+
+  async updateBackupSettings(data: BackupSettingsInput): Promise<APIResponse<BackupStatus>> {
+    return this.request({ method: 'PUT', url: '/admin/backup-settings', data });
   }
 
   // Purchasing (المشتريات)

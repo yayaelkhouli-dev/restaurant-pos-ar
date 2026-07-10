@@ -232,6 +232,43 @@ export interface DashboardStats {
 // Settings (key/value map)
 export type AppSettings = Record<string, string>;
 
+// Backups (النسخ الاحتياطي)
+export interface BackupInfo {
+  name: string;
+  size_bytes: number;
+  created_at: string;
+  /** "safety" dumps are taken automatically before a restore and are never auto-pruned. */
+  kind: 'backup' | 'safety';
+  /** True when this dump also exists at the external destination. */
+  on_external: boolean;
+}
+
+export interface BackupSettingsInput {
+  auto_enabled: boolean;
+  interval_hours: number;
+  retention_days: number;
+  external_path: string;
+}
+
+export interface BackupStatus extends BackupSettingsInput {
+  last_at: string;
+  last_status: string;
+  backup_dir: string;
+  /** False when pg_dump could not be located — nothing here works without it. */
+  tools_found: boolean;
+  tools_dir: string;
+  /** Re-checked on every read, so an unplugged USB stick shows up immediately. */
+  external_ok: boolean;
+  external_error?: string;
+}
+
+export interface BackupRunResult {
+  info: BackupInfo;
+  external_path?: string;
+  external_error?: string;
+  pruned: number;
+}
+
 export interface SalesReportItem {
   date: string;
   order_count: number;

@@ -34,9 +34,37 @@ set "PRERESET=%BACKUPDIR%\pre_reset_%TS%.dump"
 
 echo.
 echo [1/4] Dumping the current database first...
-"%PGBIN%\pg_dump.exe" -h 127.0.0.1 -U postgres -d %DB% -F c -f "%PRERESET%" 2>nul
-if exist "%PRERESET%" (echo       Saved: %PRERESET%) else (echo       No existing database to dump - continuing.)
 
+REM Ask three separate questions, because the answers need different messages.
+REM Do NOT use `for /f ... in (`"quoted\path.exe" ...`)` here: cmd mangles the
+REM quoting, the probe silently fails, and the script then wipes a database it
+REM believes does not exist. Exit codes only.
+"%PGBIN%\pg_isready.exe" -h 127.0.0.1 -p 5432 -q
+if errorlevel 1 goto :nopg
+
+"%PGBIN%\psql.exe" -h 127.0.0.1 -U postgres -d postgres -c "SELECT 1" >nul 2>&1
+if errorlevel 1 goto :noauth
+
+REM A fresh install has no database to dump, and that is fine. Anything else
+REM means a failed dump must ABORT the reset.
+"%PGBIN%\psql.exe" -h 127.0.0.1 -U postgres -d %DB% -c "SELECT 1" >nul 2>&1
+if errorlevel 1 goto :nodb
+
+"%PGBIN%\pg_dump.exe" -h 127.0.0.1 -U postgres -d %DB% -F c -f "%PRERESET%"
+if errorlevel 1 goto :dumpfailed
+REM `if exist` is not proof: pg_dump leaves a 0-byte file behind when it fails,
+REM and pg_restore -l is the only thing that proves the archive is readable.
+if not exist "%PRERESET%" goto :dumpfailed
+for %%A in ("%PRERESET%") do if %%~zA EQU 0 goto :dumpempty
+"%PGBIN%\pg_restore.exe" -l "%PRERESET%" >nul 2>&1
+if errorlevel 1 goto :dumpcorrupt
+echo       Verified: %PRERESET%
+goto :closeconns
+
+:nodb
+echo       Database "%DB%" does not exist yet - nothing to dump.
+
+:closeconns
 echo.
 echo [2/4] Closing open connections...
 "%PGBIN%\psql.exe" -h 127.0.0.1 -U postgres -d postgres -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname='%DB%' AND pid <> pg_backend_pid();" >nul 2>&1
@@ -73,6 +101,46 @@ echo.
 pause
 endlocal
 exit /b 0
+
+:nopg
+echo.
+echo   [ABORTED] PostgreSQL is not answering on 127.0.0.1:5432 - nothing was erased.
+echo             Run start-pos.bat first.
+pause
+endlocal
+exit /b 1
+
+:noauth
+echo.
+echo   [ABORTED] PostgreSQL refused the connection - nothing was erased.
+echo             Check the password in POS_DB_PASSWORD.
+pause
+endlocal
+exit /b 1
+
+:dumpfailed
+echo.
+echo   [ABORTED] The pre-reset backup FAILED, so nothing was erased.
+echo             Is PostgreSQL running? Try start-pos.bat first.
+pause
+endlocal
+exit /b 1
+
+:dumpempty
+echo.
+echo   [ABORTED] The pre-reset backup came out EMPTY, so nothing was erased.
+echo             Check free disk space on this drive.
+pause
+endlocal
+exit /b 1
+
+:dumpcorrupt
+echo.
+echo   [ABORTED] The pre-reset backup cannot be read back, so nothing was erased.
+echo             File: %PRERESET%
+pause
+endlocal
+exit /b 1
 
 :dropfailed
 echo       Could not drop the database. Stop the system first: stop-pos.bat

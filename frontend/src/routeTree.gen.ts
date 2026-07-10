@@ -26,6 +26,7 @@ import { Route as AdminKitchenRouteImport } from './routes/admin/kitchen'
 import { Route as AdminIngredientsRouteImport } from './routes/admin/ingredients'
 import { Route as AdminDashboardRouteImport } from './routes/admin/dashboard'
 import { Route as AdminCounterRouteImport } from './routes/admin/counter'
+import { Route as AdminBackupsRouteImport } from './routes/admin/backups'
 
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
@@ -112,12 +113,18 @@ const AdminCounterRoute = AdminCounterRouteImport.update({
   path: '/counter',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminBackupsRoute = AdminBackupsRouteImport.update({
+  id: '/backups',
+  path: '/backups',
+  getParentRoute: () => AdminRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/admin': typeof AdminRouteWithChildren
   '/kitchen': typeof KitchenRoute
   '/login': typeof LoginRoute
+  '/admin/backups': typeof AdminBackupsRoute
   '/admin/counter': typeof AdminCounterRoute
   '/admin/dashboard': typeof AdminDashboardRoute
   '/admin/ingredients': typeof AdminIngredientsRoute
@@ -136,6 +143,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/kitchen': typeof KitchenRoute
   '/login': typeof LoginRoute
+  '/admin/backups': typeof AdminBackupsRoute
   '/admin/counter': typeof AdminCounterRoute
   '/admin/dashboard': typeof AdminDashboardRoute
   '/admin/ingredients': typeof AdminIngredientsRoute
@@ -156,6 +164,7 @@ export interface FileRoutesById {
   '/admin': typeof AdminRouteWithChildren
   '/kitchen': typeof KitchenRoute
   '/login': typeof LoginRoute
+  '/admin/backups': typeof AdminBackupsRoute
   '/admin/counter': typeof AdminCounterRoute
   '/admin/dashboard': typeof AdminDashboardRoute
   '/admin/ingredients': typeof AdminIngredientsRoute
@@ -177,6 +186,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/kitchen'
     | '/login'
+    | '/admin/backups'
     | '/admin/counter'
     | '/admin/dashboard'
     | '/admin/ingredients'
@@ -195,6 +205,7 @@ export interface FileRouteTypes {
     | '/'
     | '/kitchen'
     | '/login'
+    | '/admin/backups'
     | '/admin/counter'
     | '/admin/dashboard'
     | '/admin/ingredients'
@@ -214,6 +225,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/kitchen'
     | '/login'
+    | '/admin/backups'
     | '/admin/counter'
     | '/admin/dashboard'
     | '/admin/ingredients'
@@ -357,10 +369,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminCounterRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/backups': {
+      id: '/admin/backups'
+      path: '/backups'
+      fullPath: '/admin/backups'
+      preLoaderRoute: typeof AdminBackupsRouteImport
+      parentRoute: typeof AdminRoute
+    }
   }
 }
 
 interface AdminRouteChildren {
+  AdminBackupsRoute: typeof AdminBackupsRoute
   AdminCounterRoute: typeof AdminCounterRoute
   AdminDashboardRoute: typeof AdminDashboardRoute
   AdminIngredientsRoute: typeof AdminIngredientsRoute
@@ -377,6 +397,7 @@ interface AdminRouteChildren {
 }
 
 const AdminRouteChildren: AdminRouteChildren = {
+  AdminBackupsRoute: AdminBackupsRoute,
   AdminCounterRoute: AdminCounterRoute,
   AdminDashboardRoute: AdminDashboardRoute,
   AdminIngredientsRoute: AdminIngredientsRoute,

@@ -17,6 +17,7 @@ import {
   Package,
   ClipboardList,
   Truck,
+  HardDrive,
   ChevronLeft,
   ChevronRight
 } from 'lucide-react'
@@ -111,6 +112,13 @@ const adminSections = [
     icon: <BarChart3 className="w-5 h-5" />,
     description: 'التحليلات والتقارير',
     href: '/admin/reports'
+  },
+  {
+    id: 'backups',
+    label: 'النسخ الاحتياطي',
+    icon: <HardDrive className="w-5 h-5" />,
+    description: 'حماية البيانات من الضياع',
+    href: '/admin/backups'
   }
 ]
 

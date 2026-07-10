@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { Link } from '@tanstack/react-router'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -15,7 +16,8 @@ import {
   Banknote,
   Printer,
   Save,
-  RotateCcw
+  RotateCcw,
+  HardDrive
 } from 'lucide-react'
 
 const DEFAULT_SETTINGS = {
@@ -27,7 +29,6 @@ const DEFAULT_SETTINGS = {
   receipt_footer: 'في انتظار زيارتكم مجدداً!',
   receipt_width: '80', // thermal paper width in mm: 58 or 80
   notification_email: 'admin@restaurant.com',
-  backup_frequency: 'daily',
   theme: 'light',
   language: 'ar'
 }
@@ -41,6 +42,13 @@ export function AdminSettings() {
   const { data: saved } = useQuery({
     queryKey: ['settings'],
     queryFn: () => apiClient.getSettings().then(res => res.data || {})
+  })
+
+  // Real backup state. This card used to print a hardcoded "محدّث" whether or not
+  // a backup had ever run.
+  const { data: backupStatus } = useQuery({
+    queryKey: ['backup-settings'],
+    queryFn: () => apiClient.getBackupSettings().then(res => res.data ?? null),
   })
 
   useEffect(() => {
@@ -251,17 +259,18 @@ export function AdminSettings() {
               </select>
             </div>
             <div>
-              <label className="text-sm font-medium mb-2 block">تكرار النسخ الاحتياطي</label>
-              <select
-                className="w-full p-2 border border-input rounded-md bg-background"
-                value={settings.backup_frequency}
-                onChange={(e) => setSettings({...settings, backup_frequency: e.target.value})}
-              >
-                <option value="hourly">كل ساعة</option>
-                <option value="daily">يومياً</option>
-                <option value="weekly">أسبوعياً</option>
-                <option value="manual">يدوياً فقط</option>
-              </select>
+              <label className="text-sm font-medium mb-2 block">النسخ الاحتياطي</label>
+              <Link to="/admin/backups">
+                <Button variant="outline" className="w-full justify-start">
+                  <HardDrive className="w-4 h-4 ml-2" />
+                  إدارة النسخ الاحتياطي
+                </Button>
+              </Link>
+              <p className="text-xs text-muted-foreground mt-1">
+                {backupStatus?.auto_enabled
+                  ? `نسخ تلقائي كل ${backupStatus.interval_hours} ساعة`
+                  : 'النسخ التلقائي مُطفأ — بياناتك غير محميّة'}
+              </p>
             </div>
           </CardContent>
         </Card>
@@ -333,9 +342,15 @@ export function AdminSettings() {
             </div>
             <div className="text-center">
               <Badge variant="outline" className="w-full">
-                حالة النسخ الاحتياطي
+                آخر نسخة احتياطية
               </Badge>
-              <p className="text-sm text-green-600 mt-1">محدّث</p>
+              {backupStatus?.last_at ? (
+                <p className={`text-sm mt-1 ${backupStatus.last_status === 'ok' ? 'text-green-600' : 'text-destructive'}`}>
+                  {new Date(backupStatus.last_at).toLocaleDateString('ar-EG')}
+                </p>
+              ) : (
+                <p className="text-sm text-destructive mt-1">لا توجد</p>
+              )}
             </div>
             <div className="text-center">
               <Badge variant="outline" className="w-full">

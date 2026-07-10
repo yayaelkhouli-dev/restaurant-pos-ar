@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"pos-backend/internal/backup"
 	"pos-backend/internal/handlers"
 	"pos-backend/internal/middleware"
 	"pos-backend/internal/models"
@@ -18,7 +19,7 @@ import (
 )
 
 // SetupRoutes configures all API routes
-func SetupRoutes(router *gin.RouterGroup, db *sql.DB, authMiddleware gin.HandlerFunc) {
+func SetupRoutes(router *gin.RouterGroup, db *sql.DB, authMiddleware gin.HandlerFunc, backupSvc *backup.Service) {
 	// Initialize handlers
 	authHandler := handlers.NewAuthHandler(db)
 	orderHandler := handlers.NewOrderHandler(db)
@@ -30,6 +31,7 @@ func SetupRoutes(router *gin.RouterGroup, db *sql.DB, authMiddleware gin.Handler
 	purchasingHandler := handlers.NewPurchasingHandler(db)
 	shiftHandler := handlers.NewShiftHandler(db)
 	modifierHandler := handlers.NewModifierHandler(db)
+	backupHandler := handlers.NewBackupHandler(backupSvc)
 
 	// Public routes (no authentication required)
 	public := router.Group("/")
@@ -180,6 +182,19 @@ func SetupRoutes(router *gin.RouterGroup, db *sql.DB, authMiddleware gin.Handler
 		// System settings (إعدادات النظام)
 		admin.GET("/settings", settingsHandler.GetSettings)
 		admin.PUT("/settings", settingsHandler.UpdateSettings)
+
+		// Backups (النسخ الاحتياطي).
+		// Every path here is static on purpose — mixing a static segment with a
+		// :param at the same position makes gin's router panic at startup.
+		// Restore/delete/settings-write additionally require role=admin, checked
+		// inside the handlers; this group also admits managers.
+		admin.GET("/backups", backupHandler.GetBackups)
+		admin.POST("/backups/create", backupHandler.CreateBackup)
+		admin.POST("/backups/restore", backupHandler.RestoreBackup)
+		admin.POST("/backups/delete", backupHandler.DeleteBackup)
+		admin.GET("/backups/download", backupHandler.DownloadBackup)
+		admin.GET("/backup-settings", backupHandler.GetBackupSettings)
+		admin.PUT("/backup-settings", backupHandler.UpdateBackupSettings)
 
 		// Purchasing / receiving (المشتريات والتوريد)
 		admin.GET("/purchases", purchasingHandler.GetPurchases)

@@ -1,10 +1,15 @@
 package main
 
 import (
+	"context"
 	"log"
+	"net/http"
 	"os"
+	"path/filepath"
+	"strings"
 
 	"pos-backend/internal/api"
+	"pos-backend/internal/backup"
 	"pos-backend/internal/database"
 	"pos-backend/internal/middleware"
 
@@ -44,6 +49,23 @@ func main() {
 
 	log.Println("Successfully connected to database")
 
+	// Backups. The scheduler is a no-op until an admin turns it on in the UI.
+	backupSvc := backup.New(db, backup.DBConfig{
+		Host:     dbConfig.Host,
+		Port:     dbConfig.Port,
+		User:     dbConfig.User,
+		Password: dbConfig.Password,
+		DBName:   dbConfig.DBName,
+	})
+	if backupSvc.Ready() {
+		log.Printf("Backups enabled, writing to %s", backupSvc.BackupDir())
+	} else {
+		log.Println("WARNING: pg_dump was not found — backups are unavailable. Set PG_BIN_DIR.")
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	backupSvc.StartScheduler(ctx)
+
 	// Initialize Gin router
 	gin.SetMode(getEnv("GIN_MODE", "release"))
 	router := gin.New()
@@ -68,7 +90,12 @@ func main() {
 
 	// Initialize API routes
 	apiRoutes := router.Group("/api/v1")
-	api.SetupRoutes(apiRoutes, db, authMiddleware)
+	api.SetupRoutes(apiRoutes, db, authMiddleware, backupSvc)
+
+	// Serve the built frontend when it sits next to the binary. This is how the
+	// packaged product runs: one process, one port, no Node.js. In development
+	// the folder is absent and Vite serves the UI on :3000 instead.
+	serveWebUI(router, webDir())
 
 	// Start server
 	port := getEnv("PORT", "8080")
@@ -77,6 +104,40 @@ func main() {
 	if err := router.Run(":" + port); err != nil {
 		log.Fatalf("Failed to start server: %v", err)
 	}
+}
+
+func webDir() string {
+	if d := os.Getenv("WEB_DIR"); d != "" {
+		return d
+	}
+	if exe, err := os.Executable(); err == nil {
+		return filepath.Join(filepath.Dir(exe), "web")
+	}
+	return "web"
+}
+
+// serveWebUI serves the static bundle and falls back to index.html for any path
+// the API did not claim, because the router lives in the browser: a refresh on
+// /admin/counter must return the app, not a 404.
+func serveWebUI(router *gin.Engine, dir string) {
+	index := filepath.Join(dir, "index.html")
+	if st, err := os.Stat(index); err != nil || st.IsDir() {
+		log.Printf("No web UI at %s — serving API only", dir)
+		return
+	}
+	log.Printf("Serving web UI from %s", dir)
+
+	router.Static("/assets", filepath.Join(dir, "assets"))
+	router.StaticFile("/favicon.ico", filepath.Join(dir, "favicon.ico"))
+
+	router.NoRoute(func(c *gin.Context) {
+		p := c.Request.URL.Path
+		if strings.HasPrefix(p, "/api/") || strings.HasPrefix(p, "/health") {
+			c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "Not found"})
+			return
+		}
+		c.File(index)
+	})
 }
 
 func getEnv(key, defaultValue string) string {
